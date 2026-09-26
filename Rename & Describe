@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rename describe — PDFs (basic)</title>
+  <style>
+    :root {
+      --ink: #1a2430;
+      --muted: #5c6b78;
+      --line: #8a97a3;
+      --paper: #fff;
+      --wire: #f4f6f8;
+      --accent: #1f4e79;
+      --ok: #1f7a4d;
+      --err: #9b2c2c;
+      --ff: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; min-height: 100%; }
+    body {
+      font: 14px/1.45 var(--ff);
+      color: var(--ink);
+      background: var(--wire);
+    }
+    .app {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+    .wire {
+      width: 100%;
+      box-sizing: border-box;
+      border: 2px solid #6d7b86;
+      background: var(--wire);
+      padding: 12px 14px 16px;
+      min-height: 100vh;
+    }
+    .chrome {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px dashed var(--line);
+      padding: 4px 4px 10px;
+      margin-bottom: 12px;
+    }
+    .chrome h1 { margin: 0; font-size: 18px; }
+    .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+    button {
+      font: 700 12px/1 var(--ff);
+      border: 1px solid #4d5d6b;
+      background: #fff;
+      border-radius: 4px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    button.pri { background: #d9e4ef; }
+    button:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .lead { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+    .drop {
+      border: 2px dashed #7b8c99;
+      background: #fff;
+      text-align: center;
+      padding: 22px 12px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .drop.over { border-color: var(--accent); background: #f7fafc; color: var(--ink); }
+    .status { min-height: 1.3em; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .table-wrap { overflow-x: auto; border: 1px solid #b7c3cd; background: #fff; }
+    table.list {
+      width: 100%;
+      min-width: 760px;
+      table-layout: fixed;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 13px;
+    }
+    table.list th, table.list td {
+      border-bottom: 1px solid #e1e7ec;
+      padding: 8px 8px;
+      vertical-align: top;
+      text-align: left;
+      overflow: hidden;
+    }
+    table.list th {
+      position: relative;
+      background: #eef2f5;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      user-select: none;
+    }
+    table.list input, table.list textarea {
+      width: 100%;
+      font: 13px/1.35 var(--ff);
+      border: 1px solid #c9d4de;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+    table.list textarea { min-height: 58px; resize: vertical; }
+    .resize {
+      position: absolute;
+      top: 0;
+      right: -3px;
+      width: 8px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 2;
+    }
+    .resize:hover, .resize.hot { background: rgba(31, 78, 121, 0.18); }
+    body.col-resizing { cursor: col-resize; user-select: none; }
+    .orig { display: block; font-weight: 700; word-break: break-word; }
+    .pages { color: var(--muted); font-size: 12px; }
+    .empty { color: var(--muted); padding: 18px; }
+    .note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+    .acts { display: flex; flex-direction: column; gap: 6px; }
+    .acts button { width: 100%; }
+    td.thumb { padding: 8px; }
+    .front {
+      display: block;
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #8a97a3;
+      background: #fff;
+      line-height: 0;
+      border-radius: 2px;
+    }
+    .front img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 320px;
+      object-fit: contain;
+      background: #e8eef2;
+    }
+    .front-ph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 180px;
+      background: #e8eef2;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .viewer {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      background: #2b3642;
+    }
+    .viewer[hidden] { display: none; }
+    .viewer-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #eef2f5;
+      border-bottom: 2px solid #6d7b86;
+      color: var(--ink);
+    }
+    .viewer-bar strong { font-size: 13px; }
+    .viewer iframe {
+      flex: 1;
+      width: 100%;
+      border: 0;
+      background: #525659;
+    }
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="wire">
+      <div class="chrome">
+        <h1>Rename describe</h1>
+        <div class="btns">
+          <button type="button" class="pri" id="btnOpen">Open PDFs</button>
+          <button type="button" id="btnSaveAll" disabled>Save all copies</button>
+          <button type="button" id="btnClear" disabled>Clear</button>
+        </div>
+      </div>
+      <p class="lead">Load a list of PDFs. Each file is read. A large front-page icon is shown for each one. A name and a short description are suggested from the text that is present. Edit them, then Save copy. A new PDF file is written. The original is not overwritten. Click the icon or Open original to look at the PDF. Drag column edges to change widths. Remove drops a file from this list after it has been renamed, or if it does not belong here.</p>
+      <div class="drop" id="drop">Drop PDFs here, or click Open PDFs — multiple files.</div>
+      <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple />
+      <p class="status" id="status">No PDFs loaded.</p>
+      <div class="table-wrap">
+        <table class="list" id="table">
+          <colgroup>
+            <col data-col="num" />
+            <col data-col="thumb" />
+            <col data-col="orig" />
+            <col data-col="name" />
+            <col data-col="desc" />
+            <col data-col="act" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Front page<span class="resize" data-col="thumb" title="Drag to resize"></span></th>
+              <th>Original PDF<span class="resize" data-col="orig" title="Drag to resize"></span></th>
+              <th>New name<span class="resize" data-col="name" title="Drag to resize"></span></th>
+              <th>Description<span class="resize" data-col="desc" title="Drag to resize"></span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" class="empty">No documents opened</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Basic wireframe. The front-page icon is page 1 of the loaded PDF. Click it to look at the original. Save copy writes a duplicate PDF under the new name. The original file is not overwritten. Column widths are draggable. Remove takes a file off this list only.</p>
+    </div>
+  </div>
+  <div class="viewer" id="viewer" hidden>
+    <div class="viewer-bar">
+      <strong id="viewerTitle">Original PDF</strong>
+      <div class="btns">
+        <button type="button" id="btnViewerTab">Open in new tab</button>
+        <button type="button" class="pri" id="btnCloseViewer">Close</button>
+      </div>
+    </div>
+    <iframe id="viewerFrame" title="Original PDF"></iframe>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+
+    var docs = [];
+    var colWidths = { num: 40, thumb: 200, orig: 180, name: 210, desc: 300, act: 140 };
+    var els = {
+      btnOpen: document.getElementById("btnOpen"),
+      btnSaveAll: document.getElementById("btnSaveAll"),
+      btnClear: document.getElementById("btnClear"),
+      fileInput: document.getElementById("fileInput"),
+      drop: document.getElementById("drop"),
+      status: document.getElementById("status"),
+      table: document.getElementById("table"),
+      tbody: document.getElementById("tbody"),
+      viewer: document.getElementById("viewer"),
+      viewerTitle: document.getElementById("viewerTitle"),
+      viewerFrame: document.getElementById("viewerFrame"),
+      btnCloseViewer: document.getElementById("btnCloseViewer"),
+      btnViewerTab: document.getElementById("btnViewerTab")
+    };
+    var viewing = null;
+
+    function applyColWidths() {
+      var cols = els.table.querySelectorAll("col[data-col]");
+      var used = 0;
+      var descCol = null;
+      for (var i = 0; i < cols.length; i++) {
+        var key = cols[i].getAttribute("data-col");
+        if (key === "desc") { descCol = cols[i]; continue; }
+        var w = colWidths[key] || 80;
+        cols[i].style.width = w + "px";
+        used += w;
+      }
+      var wrapW = els.table.parentNode ? els.table.parentNode.clientWidth : 0;
+      var descW = Math.max(colWidths.desc || 200, wrapW - used);
+      if (descCol) descCol.style.width = descW + "px";
+      els.table.style.minWidth = (used + (colWidths.desc || 200)) + "px";
+      els.table.style.width = Math.max(wrapW, used + descW) + "px";
+    }
+
+    function setStatus(msg, kind) {
+      els.status.textContent = msg;
+      els.status.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function sanitizeName(name) {
+      var base = String(name || "document").replace(/\.pdf$/i, "");
+      base = base.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/g, "");
+      if (!base) base = "document";
+      if (base.length > 120) base = base.slice(0, 120).trim();
+      return base + ".pdf";
+    }
+
+    function equipmentFrom(text) {
+      var m = String(text || "").match(/\b\d{1,4}-[A-Z]{1,3}-\d{2,5}\b/) ||
+        String(text || "").match(/\b(?:V|E|T|P|C)-\d{2,5}\b/);
+      return m ? m[0] : "";
+    }
+
+    function firstTitle(lines) {
+      for (var i = 0; i < lines.length; i++) {
+        var t = String(lines[i] || "").replace(/\s+/g, " ").trim();
+        if (t.length >= 8 && t.length <= 90 && /[A-Za-z]{3,}/.test(t)) return t;
+      }
+      return "";
+    }
+
+    function pickTitle(candidates, equipment) {
+      var list = candidates || [];
+      if (equipment) {
+        var hit = list.filter(function (t) { return t.indexOf(equipment) !== -1; });
+        if (hit.length) {
+          hit.sort(function (a, b) { return b.length - a.length; });
+          return hit[0];
+        }
+      }
+      var kind = list.filter(function (t) {
+        return /report|data sheet|separator|accumulator|vessel|inspection|calculation|datasheet/i.test(t);
+      });
+      if (kind.length) return kind[0];
+      return firstTitle(list);
+    }
+
+    function suggest(meta) {
+      var parts = [];
+      if (meta.equipment && meta.title && meta.title.indexOf(meta.equipment) !== -1) parts.push(meta.title);
+      else {
+        if (meta.equipment) parts.push(meta.equipment);
+        if (meta.title) parts.push(meta.title);
+      }
+      if (meta.pdfTitle && parts.indexOf(meta.pdfTitle) === -1 && meta.pdfTitle.length < 80) {
+        if (!parts.length) parts.push(meta.pdfTitle);
+      }
+      if (!parts.length) parts.push(meta.originalName.replace(/\.pdf$/i, ""));
+      var name = sanitizeName(parts.join(" "));
+      var descBits = [];
+      if (meta.title) descBits.push(meta.title + ".");
+      else if (meta.pdfTitle) descBits.push(meta.pdfTitle + ".");
+      if (meta.equipment && (!meta.title || meta.title.indexOf(meta.equipment) === -1)) {
+        descBits.push("Equipment: " + meta.equipment + ".");
+      }
+      descBits.push("Original file: " + meta.originalName + ".");
+      if (meta.pages) descBits.push("PDF pages: " + meta.pages + ".");
+      return { name: name, description: descBits.join(" ") };
+    }
+
+    async function renderFrontPage(pdf) {
+      var page = await pdf.getPage(1);
+      var base = page.getViewport({ scale: 1 });
+      var scale = 280 / Math.max(base.width, 1);
+      var viewport = page.getViewport({ scale: scale });
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.ceil(viewport.width));
+      canvas.height = Math.max(1, Math.ceil(viewport.height));
+      await page.render({ canvasContext: canvas.getContext("2d", { alpha: false }), viewport: viewport }).promise;
+      return canvas.toDataURL("image/jpeg", 0.72);
+    }
+
+    async function readPdf(file) {
+      if (!window.pdfjsLib) throw new Error("PDF.js did not load. Check the network connection and try again.");
+      var bytes = new Uint8Array(await file.arrayBuffer());
+      var pdf = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+      var metaTitle = "";
+      try {
+        var meta = await pdf.getMetadata();
+        if (meta && meta.info && meta.info.Title) metaTitle = String(meta.info.Title).trim();
+      } catch (e) {}
+      var maxPages = Math.min(pdf.numPages, 8);
+      var lines = [];
+      var titleCandidates = [];
+      for (var n = 1; n <= maxPages; n++) {
+        var page = await pdf.getPage(n);
+        var content = await page.getTextContent({ disableCombineTextItems: true });
+        var items = (content.items || []).filter(function (it) { return it && it.str; });
+        items.sort(function (a, b) {
+          var ay = a.transform ? a.transform[5] : 0;
+          var by = b.transform ? b.transform[5] : 0;
+          return (by - ay) || ((a.transform ? a.transform[4] : 0) - (b.transform ? b.transform[4] : 0));
+        });
+        items.forEach(function (it) {
+          var t = String(it.str || "").replace(/\s+/g, " ").trim();
+          if (t.length >= 8 && t.length <= 90 && /[A-Za-z]{3,}/.test(t) &&
+              !/\.(xls|xlsx|pdf|doc|docx|csv)$/i.test(t)) {
+            titleCandidates.push(t);
+          }
+        });
+        var pageText = items.map(function (it) { return it.str; }).join(" ").replace(/\s+/g, " ").trim();
+        if (pageText) lines.push(pageText);
+      }
+      var text = lines.join("\n");
+      var equipment = equipmentFrom(text);
+      var info = {
+        originalName: file.name,
+        pages: pdf.numPages,
+        pdfTitle: metaTitle,
+        title: pickTitle(titleCandidates, equipment),
+        equipment: equipment,
+        bytes: bytes,
+        text: text,
+        thumb: ""
+      };
+      try { info.thumb = await renderFrontPage(pdf); } catch (e) {}
+      var sug = suggest(info);
+      info.newName = sug.name;
+      info.suggestedName = sug.name;
+      info.description = sug.description;
+      return info;
+    }
+
+    function collectFromDom() {
+      els.tbody.querySelectorAll("tr[data-i]").forEach(function (tr) {
+        var i = Number(tr.getAttribute("data-i"));
+        if (!docs[i]) return;
+        var nameInput = tr.querySelector('[data-field="newName"]');
+        var descInput = tr.querySelector('[data-field="description"]');
+        if (nameInput) docs[i].newName = sanitizeName(nameInput.value);
+        if (descInput) docs[i].description = descInput.value;
+      });
+    }
+
+    function render() {
+      els.btnSaveAll.disabled = !docs.length;
+      els.btnClear.disabled = !docs.length;
+      if (!docs.length) {
+        els.tbody.innerHTML = '<tr><td colspan="6" class="empty">No documents opened</td></tr>';
+        return;
+      }
+      els.tbody.innerHTML = docs.map(function (d, i) {
+        var icon = d.thumb
+          ? "<img alt=\"Front page of " + esc(d.originalName) + "\" src=\"" + d.thumb + "\" />"
+          : "<span class=\"front-ph\">No preview</span>";
+        return "<tr data-i=\"" + i + "\">" +
+          "<td>" + (i + 1) + "</td>" +
+          "<td class=\"thumb\"><button type=\"button\" class=\"front\" data-act=\"view\" title=\"Open original\">" + icon + "</button></td>" +
+          "<td><span class=\"orig\">" + esc(d.originalName) + "</span><span class=\"pages\">Pages: " + esc(d.pages) + "</span></td>" +
+          "<td><input data-field=\"newName\" value=\"" + esc(d.newName) + "\" /></td>" +
+          "<td><textarea data-field=\"description\">" + esc(d.description) + "</textarea></td>" +
+          "<td class=\"acts\">" +
+            "<button type=\"button\" data-act=\"view\">Open original</button>" +
+            "<button type=\"button\" class=\"pri\" data-act=\"save\">Save copy</button>" +
+            "<button type=\"button\" data-act=\"remove\">Remove</button>" +
+          "</td>" +
+          "</tr>";
+      }).join("");
+    }
+
+    async function writeBlob(name, blob) {
+      if (window.showSaveFilePicker) {
+        try {
+          var handle = await window.showSaveFilePicker({
+            suggestedName: name,
+            types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }]
+          });
+          var writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return handle.name || name;
+        } catch (err) {
+          if (err && err.name === "AbortError") return "";
+        }
+      }
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return name;
+    }
+
+    function closeViewer() {
+      viewing = null;
+      els.viewer.hidden = true;
+      els.viewerFrame.src = "about:blank";
+    }
+
+    function previewUrl(item) {
+      if (!item.previewUrl) {
+        item.previewUrl = URL.createObjectURL(new Blob([item.bytes], { type: "application/pdf" }));
+      }
+      return item.previewUrl;
+    }
+
+    function openOriginal(item) {
+      if (!item || !item.bytes) {
+        setStatus("No PDF to open.", "err");
+        return;
+      }
+      viewing = item;
+      els.viewerTitle.textContent = "Original — " + item.originalName;
+      els.viewerFrame.src = previewUrl(item);
+      els.viewer.hidden = false;
+      setStatus("Showing original " + item.originalName + ".", "ok");
+    }
+
+    function openOriginalTab() {
+      if (!viewing) return;
+      var win = window.open(previewUrl(viewing), "_blank");
+      if (!win) setStatus("Allow pop-ups to open the PDF in a new tab, or use the viewer on this page.", "err");
+    }
+
+    function revokePreview(item) {
+      if (viewing === item) closeViewer();
+      if (item && item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+        item.previewUrl = "";
+      }
+    }
+
+    async function saveCopy(item) {
+      collectFromDom();
+      item.newName = sanitizeName(item.newName);
+      var pdfBlob = new Blob([item.bytes], { type: "application/pdf" });
+      var saved = await writeBlob(item.newName, pdfBlob);
+      if (!saved) return;
+      setStatus("Saved copy " + item.newName + ". Original " + item.originalName + " was not changed.", "ok");
+    }
+
+    async function saveAll() {
+      collectFromDom();
+      for (var i = 0; i < docs.length; i++) await saveCopy(docs[i]);
+    }
+
+    function removeRow(index) {
+      collectFromDom();
+      var gone = docs[index];
+      if (!gone) return;
+      revokePreview(gone);
+      docs.splice(index, 1);
+      render();
+      setStatus("Removed " + gone.originalName + " from the list. The file on disk was not deleted.", "ok");
+    }
+
+    function clearAll() {
+      docs.forEach(revokePreview);
+      docs = [];
+      els.fileInput.value = "";
+      render();
+      setStatus("All data cleared. No PDFs, no names, no descriptions.", "ok");
+    }
+
+    async function addFiles(fileList) {
+      var incoming = Array.prototype.slice.call(fileList || []).filter(function (f) {
+        return /pdf$/i.test(f.type || "") || /\.pdf$/i.test(f.name);
+      });
+      if (!incoming.length) {
+        setStatus("Choose one or more PDF files.", "err");
+        return;
+      }
+      for (var i = 0; i < incoming.length; i++) {
+        var file = incoming[i];
+        setStatus("Reading " + file.name + " (" + (i + 1) + " of " + incoming.length + ")…");
+        try {
+          var row = await readPdf(file);
+          var idx = docs.findIndex(function (d) { return d.originalName === row.originalName; });
+          if (idx >= 0) {
+            revokePreview(docs[idx]);
+            docs[idx] = row;
+          }
+          else docs.push(row);
+        } catch (err) {
+          setStatus((err && err.message ? err.message : String(err)) + " (" + file.name + ")", "err");
+        }
+      }
+      render();
+      if (docs.length) setStatus(docs.length + " PDF" + (docs.length === 1 ? "" : "s") + " loaded. Edit name and description, then Save copy.", "ok");
+    }
+
+    els.tbody.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      var tr = btn.closest("tr[data-i]");
+      if (!tr) return;
+      var index = Number(tr.getAttribute("data-i"));
+      var act = btn.getAttribute("data-act");
+      if (act === "remove") {
+        removeRow(index);
+        return;
+      }
+      if (act === "view") {
+        openOriginal(docs[index]);
+        return;
+      }
+      if (act !== "save") return;
+      var item = docs[index];
+      if (!item) return;
+      saveCopy(item).catch(function (err) {
+        setStatus(err && err.message ? err.message : String(err), "err");
+      });
+    });
+    els.tbody.addEventListener("input", collectFromDom);
+
+    els.btnOpen.addEventListener("click", function () { els.fileInput.click(); });
+    els.btnSaveAll.addEventListener("click", function () {
+      saveAll().catch(function (err) {
+        setStatus(err && err.message ? err.message : String(err), "err");
+      });
+    });
+    els.btnClear.addEventListener("click", clearAll);
+    els.btnCloseViewer.addEventListener("click", closeViewer);
+    els.btnViewerTab.addEventListener("click", openOriginalTab);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !els.viewer.hidden) closeViewer();
+    });
+    els.fileInput.addEventListener("change", function () {
+      addFiles(els.fileInput.files);
+      els.fileInput.value = "";
+    });
+    els.drop.addEventListener("click", function () { els.fileInput.click(); });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      els.drop.addEventListener(ev, function (e) { e.preventDefault(); els.drop.classList.add("over"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      els.drop.addEventListener(ev, function (e) { e.preventDefault(); els.drop.classList.remove("over"); });
+    });
+    els.drop.addEventListener("drop", function (e) {
+      addFiles(e.dataTransfer && e.dataTransfer.files);
+    });
+
+    (function bindColResize() {
+      var drag = null;
+      els.table.addEventListener("mousedown", function (e) {
+        var handle = e.target.closest(".resize");
+        if (!handle) return;
+        e.preventDefault();
+        var key = handle.getAttribute("data-col");
+        drag = { key: key, startX: e.clientX, startW: colWidths[key], handle: handle };
+        handle.classList.add("hot");
+        document.body.classList.add("col-resizing");
+      });
+      window.addEventListener("mousemove", function (e) {
+        if (!drag) return;
+        colWidths[drag.key] = Math.max(90, drag.startW + (e.clientX - drag.startX));
+        applyColWidths();
+      });
+      window.addEventListener("mouseup", function () {
+        if (!drag) return;
+        drag.handle.classList.remove("hot");
+        document.body.classList.remove("col-resizing");
+        drag = null;
+      });
+    })();
+
+    window.addEventListener("resize", applyColWidths);
+    applyColWidths();
+    render();
+  })();
+  </script>
+</body>
+</html>
